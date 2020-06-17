@@ -10,6 +10,7 @@ runtime: shiny
 ```{r global, include=FALSE}
 library(dplyr)
 library(tidytext)
+require(textdata)
 library(rtweet)
 # library(wordcloud2)
 library(ggwordcloud)

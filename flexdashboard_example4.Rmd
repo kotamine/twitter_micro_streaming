@@ -10,8 +10,8 @@ runtime: shiny
 ```{r global, include=FALSE}
 library(dplyr)
 library(tidytext)
-require(textdata)
 library(rtweet)
+library(readr)
 # library(wordcloud2)
 library(ggwordcloud)
 library(ggplot2)
@@ -19,7 +19,11 @@ library(plotly)
 library(htmlwidgets)
 library(tools)
 
+
 source("rtweet_auth2.R") # using Twitter developer credential
+
+# lexi_nrc <- tidytext::get_sentiments("nrc")
+load(file = "lexi_nrc.RData")
 ```
 
 
@@ -42,16 +46,19 @@ var array_y = [y0, y1, y2, y3, y4];
 var nsec = document.getElementById("nsec").value;
 if (!isNaN(nsec_init)) nsec = nsec_init 
 
+// show loading image for nsec seconds  
 setTimeout(() => { 
-array_x.forEach(x => x.style.display = "none");
-array_y.forEach(y => y.style.display = "block");
+  array_x.forEach(x => x.style.display = "none");
+  array_y.forEach(y => y.style.display = "block");
+  
+  // remove initial loading note
+  if (!isNaN(nsec_init)) document.getElementById("note0").style.display = "none";
 }, nsec*1000);
 
 console.log("waiting time = nsec: " + nsec);
 array_x.forEach(x => x.style.display = "block");
 if (isNaN(nsec_init)) array_y.forEach(y => y.style.display = "none");
-} 
-
+}
 ```
 
 
@@ -74,7 +81,7 @@ if (isNaN(nsec_init)) array_y.forEach(y => y.style.display = "none");
   margin-left: -100px;
   padding:2px;
   position: relative;
-  top: -150px;
+  top: -140px;
 }
 
 .main_content {
@@ -97,6 +104,16 @@ if (isNaN(nsec_init)) array_y.forEach(y => y.style.display = "none");
   margin: 2px;
   border-radius: 10px;
 }
+
+.initial_note {
+  width: auto;
+  color: white;
+  background: rgba(0, 64, 255, 0.3); 
+  border: 0px;
+  padding: 5px;
+  margin: 5px;
+  border-radius: 10px;
+}
 ```
 
 
@@ -105,6 +122,12 @@ Column {.sidebar}
 
 ```{r}
 tags$script(JS('useLoadingImage(5)'))
+
+
+div(id = "note0", class = "initial_note",
+      HTML("<h3>Please wait. <br> <strong>Initial loading</strong> takes time. <br></h3>")
+)
+
 
 textInput("text", label="Streaming keyword:",
           value = "#BlackLivesMatter" 
@@ -117,8 +140,7 @@ radioButtons("retweets", label = "Include retweets:",
              choices = c("True", "False"),
              selected = "True", inline = TRUE) 
 
-HTML('<button id="update" type="button" class="btn btn-default action-button" onclick="useLoadingImage()">Update</button>')
-
+HTML('<button id="update" type="button" class="btn btn-default action-button" onclick="useLoadingImage()">Stream</button>')
 ```
 
 ##### Display Options:
@@ -135,7 +157,7 @@ div(
     sliderInput('n_min_wc', 'Word cloud minimum frequency:',
                 min = 1, value = 2, max = 10),
     sliderInput('max_size', 'Word cloud maximum word size:', 
-                value = 30, min = 10, max=50),
+                value = 25, min = 10, max=50),
     div(class = "n_tweets",
         renderUI({ h3(strong(nobs()), "tweets collected") })
         )
@@ -234,7 +256,7 @@ div(
       ) +
       scale_size_area(max_size = input$max_size) +
       theme_minimal() 
- }, width = 600, height = 600)
+ }, width = 550, height = 550)
 )
 )
 ```
@@ -273,7 +295,6 @@ Column
 
 ### Sentiments
 ```{r}
-lexi_nrc <- get_sentiments("nrc")
 senti_nrc <- reactive({
   tweet_words_interesting() %>%
     left_join(lexi_nrc) %>%
@@ -339,7 +360,8 @@ div(
             )
           ),
           showlegend = F,
-          autosize = F, width = 350, height = 280, margin = m
+          autosize = F, width = 300, height = 250, 
+          margin = list(l = 10, r = 10, b = 20, t = 20, pad = 2)
         )
     })
   )

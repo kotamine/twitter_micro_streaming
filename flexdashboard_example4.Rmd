@@ -1,0 +1,347 @@
+---
+title: "Twitter Data Micro Streaming on Keyword"
+output: 
+  flexdashboard::flex_dashboard:
+    social: menu
+    source_code: embed
+runtime: shiny
+---
+
+```{r global, include=FALSE}
+library(dplyr)
+library(tidytext)
+library(rtweet)
+# library(wordcloud2)
+library(ggwordcloud)
+library(ggplot2)
+library(plotly)
+library(htmlwidgets)
+library(tools)
+
+source("rtweet_auth2.R") # using Twitter developer credential
+```
+
+
+```{js, echo=FALSE}
+function useLoadingImage(nsec_init=NaN) {
+// provide nsec_init for initial app loading 
+var x0 = document.getElementById("loading_page0");
+var y0 = document.getElementById("main_content0");
+var x1 = document.getElementById("loading_page1");
+var y1 = document.getElementById("main_content1");
+var x2 = document.getElementById("loading_page2");
+var y2 = document.getElementById("main_content2");
+var x3 = document.getElementById("loading_page3");
+var y3 = document.getElementById("main_content3");
+var x4 = document.getElementById("loading_page4");
+var y4 = document.getElementById("main_content4");
+
+var array_x = [x0, x1, x2, x3, x4];
+var array_y = [y0, y1, y2, y3, y4];
+var nsec = document.getElementById("nsec").value;
+if (!isNaN(nsec_init)) nsec = nsec_init 
+
+setTimeout(() => { 
+array_x.forEach(x => x.style.display = "none");
+array_y.forEach(y => y.style.display = "block");
+}, nsec*1000);
+
+console.log("waiting time = nsec: " + nsec);
+array_x.forEach(x => x.style.display = "block");
+if (isNaN(nsec_init)) array_y.forEach(y => y.style.display = "none");
+} 
+
+```
+
+
+```{css, echo=FALSE}
+.loader {
+  border: 16px solid #f3f3f3; /* Light grey */
+  border-top: 16px solid #3498db; /* Blue */
+  border-radius: 50%;
+  width: 120px;
+  height: 120px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.wc_content {
+  margin-left: -100px;
+  padding:2px;
+  position: relative;
+  top: -150px;
+}
+
+.main_content {
+  position: relative;
+  margin-lef: 15px;
+}
+
+.loading_content {
+  position: relative;
+  margin-left: 100px;
+  top: 100px;
+}
+
+.n_tweets {
+  width: auto;
+  color: white;
+  background: rgba(0, 128, 0, 0.3); 
+  border: 0px;
+  padding: 10px;
+  margin: 2px;
+  border-radius: 10px;
+}
+```
+
+
+Column {.sidebar}
+-----------------------------------------------------------------------
+
+```{r}
+tags$script(JS('useLoadingImage(5)'))
+
+textInput("text", label="Streaming keyword:",
+          value = "#BlackLivesMatter" 
+)
+
+sliderInput("nsec", label = "Streaming data collection (sec):",
+            value = 5, min = 5, max = 180)
+
+radioButtons("retweets", label = "Include retweets:",
+             choices = c("True", "False"),
+             selected = "True", inline = TRUE) 
+
+HTML('<button id="update" type="button" class="btn btn-default action-button" onclick="useLoadingImage()">Update</button>')
+
+```
+
+##### Display Options:
+```{r}
+div(
+  div(
+    id = "loading_page0",
+    HTML('<div class="loader"></div>')
+  ),
+  div(
+    id = "main_content0",
+    textInput("remove", "Words to remove (separated by ';'):", 
+                  placeholder = "blacklivesmatter; blm;"),
+    sliderInput('n_min_wc', 'Word cloud minimum frequency:',
+                min = 1, value = 2, max = 10),
+    sliderInput('max_size', 'Word cloud maximum word size:', 
+                value = 30, min = 10, max=50),
+    div(class = "n_tweets",
+        renderUI({ h3(strong(nobs()), "tweets collected") })
+        )
+  )
+)
+```
+
+
+
+Column
+-----------------------------------------------------------------------
+
+### Word Cloud
+
+```{r}
+## sample tweets
+tw <- reactive({
+  # react to search button
+  input$update
+  print('streaming...')
+  
+  isolate({
+    stream_tweets(
+      input$text, timeout = input$nsec,
+      include_rts = as.logical(input$retweets),
+      language = "en"
+    )
+  })
+})
+
+nobs <- reactive({
+  if (length(tw())>0) return(nrow(tw()))
+  return(0)
+})
+
+
+tweet_words_interesting <- reactive({
+  # process tweet text by removing stop words 
+  # react to tw() or input$remove
+  if (length(tw())==0) return()
+  
+  words_rm <- if (length(input$remove) > 0) {
+    gsub("'","’", # use Twitter apostrophe symbol 
+         gsub(" ","", tolower(input$remove))) %>% 
+      strsplit(split=";") %>% "[["(1)
+  } else {
+    NULL
+  }
+  
+  my_stop_words <- stop_words %>%
+    select(word) %>%
+    bind_rows(data.frame(
+      word = c("https", "t.co", "rt", "amp", 
+               "i’m", "we’re" , words_rm)))
+  
+  tweet_words <- tw() %>% select(status_id, text) %>% unnest_tokens(word, text)
+  
+  tweet_words %>% anti_join(my_stop_words)
+})
+
+
+wc_df <- reactive({
+  # process further for word counts
+  tweet_words_interesting() %>%
+    dplyr::count(word, sort=T) %>%
+    filter(n >= input$n_min_wc )
+})
+
+
+## note: wordcloud2 replaced due to causing a js error 
+# renderWordcloud2({
+#   if (length(wc_df()) == 0) return()
+#   print(wc_df())
+#   wordcloud2(data = wc_df(), size = .75)
+# })
+
+
+## note: ggwordcloud is slower than wordcloud2 
+div(
+  div(
+    id = "loading_page4", class = "loading_content",
+    HTML('<div class="loader"></div>')
+  ),
+  div(
+    id = "main_content4", class = "wc_content",
+ renderPlot({
+      wc_df() %>%
+        mutate(color = factor(sample.int(10, nrow(wc_df()), replace = TRUE))) %>%
+        ggplot(aes(label = word, size = n,
+                   color = color)) +
+      geom_text_wordcloud_area(
+        aes(angle = 45 * sample(-2:2, nrow(wc_df()), 
+                                replace = TRUE, prob = c(1, 1, 4, 1, 1))),
+        mask = png::readPNG("twitter_black2.png"),
+        rm_outside = TRUE
+      ) +
+      scale_size_area(max_size = input$max_size) +
+      theme_minimal() 
+ }, width = 600, height = 600)
+)
+)
+```
+
+
+### Most Used Words
+```{r}
+m <- list(l = 10, r = 10, b = 0, t = 0, pad = 2) # plotly margin
+
+div(
+  div(
+    id = "loading_page1", class = "loading_content",
+    HTML('<div class="loader"></div>')
+  ),
+  div(
+    id = "main_content1", class = "main_content",
+    renderPlotly({
+      if (length(tweet_words_interesting()) == 0) return()
+      
+      tweet_words_interesting() %>% 
+        group_by(word) %>%
+        tally(sort=TRUE) %>% # another way of creating word counts
+        slice(1:12) %>% 
+        mutate(word = factor(word, levels = rev(word))) %>%
+        plot_ly(y =~ word, x = ~n, type = "bar", orientation = 'h') %>%
+        layout(xaxis = list(title="frequency"), yaxis = list(title=""),
+               autosize = F, width = 350, height = 280, margin = m)
+    })
+  )
+)
+```
+
+
+Column
+-----------------------------------------------------------------------
+
+### Sentiments
+```{r}
+lexi_nrc <- get_sentiments("nrc")
+senti_nrc <- reactive({
+  tweet_words_interesting() %>%
+    left_join(lexi_nrc) %>%
+    filter(!is.na(sentiment)) %>%
+    group_by(sentiment) %>%
+    summarise(n=n())
+})
+
+
+senti_nrc_sen <- reactive({
+  senti_nrc() %>%
+    filter((sentiment %in% c("positive", "negative")))
+})
+
+div(
+  div(
+    id = "loading_page2", class = "loading_content",
+    HTML('<div class="loader"></div>')
+  ),
+  div(
+    id = "main_content2", class = "main_content",
+    renderPlotly({
+      if (length(tweet_words_interesting()) == 0) return()
+
+      plot_ly(type='pie',
+              labels = senti_nrc_sen()$sentiment %>% toTitleCase(),
+              values = senti_nrc_sen()$n,
+              textinfo='label+percent',
+              insidetextorientation='radial') %>%
+        layout( autosize = F, width = 350, height = 280, margin = m)
+    })
+  ))
+```
+
+### Emotions
+```{r}
+
+senti_nrc_emo <- reactive({
+  senti_nrc() %>%
+    filter(!(sentiment %in% c("positive", "negative")))
+})
+
+div(
+  div(
+    id = "loading_page3", class = "loading_content",
+    HTML('<div class="loader"></div>')
+  ),
+  div(
+    id = "main_content3", class = "main_content",
+    renderPlotly({
+      if (length(tweet_words_interesting()) == 0) return()
+
+      plot_ly(
+        type = 'scatterpolar',
+        r = senti_nrc_emo()$n,
+        theta = senti_nrc_emo()$sentiment %>% toTitleCase(),
+        fill = 'toself')  %>%
+        layout(
+          polar = list(
+            radialaxis = list(
+              visible = T,
+              range = c(0, max(senti_nrc_emo()$n, nrow(tw())))
+            )
+          ),
+          showlegend = F,
+          autosize = F, width = 350, height = 280, margin = m
+        )
+    })
+  )
+)
+```
+

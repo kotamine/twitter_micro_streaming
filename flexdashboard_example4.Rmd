@@ -24,6 +24,13 @@ source("rtweet_auth2.R") # using Twitter developer credential
 
 # lexi_nrc <- tidytext::get_sentiments("nrc")
 load(file = "lexi_nrc.RData")
+
+# rt <- stream_tweets(
+#   "#BlackLivesMatter", timeout = 20, include_rts = TRUE,
+#   language = "en",
+# )
+# save(rt, file = 'rt_sample.RData')
+load(file = 'rt_sample.RData')
 ```
 
 
@@ -40,6 +47,8 @@ var x3 = document.getElementById("loading_page3");
 var y3 = document.getElementById("main_content3");
 var x4 = document.getElementById("loading_page4");
 var y4 = document.getElementById("main_content4");
+var z1 = document.getElementById("display_inputs");
+var z2 = document.getElementById("n_tweets");
 
 var array_x = [x0, x1, x2, x3, x4];
 var array_y = [y0, y1, y2, y3, y4];
@@ -49,15 +58,26 @@ if (!isNaN(nsec_init)) nsec = nsec_init
 // show loading image for nsec seconds  
 setTimeout(() => { 
   array_x.forEach(x => x.style.display = "none");
-  array_y.forEach(y => y.style.display = "block");
-  
-  // remove initial loading note
-  if (!isNaN(nsec_init)) document.getElementById("note0").style.display = "none";
+  array_y.forEach(y => y.style.visibility = "visible");
+  z1.style.display = "block";
+  z2.style.visibility = "visible";
 }, nsec*1000);
 
 console.log("waiting time = nsec: " + nsec);
 array_x.forEach(x => x.style.display = "block");
-if (isNaN(nsec_init)) array_y.forEach(y => y.style.display = "none");
+array_y.forEach(y => y.style.visibility = "hidden");
+z1.style.display = "none";
+z2.style.visibility = "hidden";
+}
+
+function initialNote() {
+  // remove initial loading note
+setTimeout(() => { 
+   document.getElementById("note0").style.display = "none";
+   document.getElementById("preload").style.display = "none";
+   document.getElementById("update").style.visibility = "visible";
+}, 15*1000);
+document.getElementById("update").style.visibility = "hidden";
 }
 ```
 
@@ -121,11 +141,12 @@ Column {.sidebar}
 -----------------------------------------------------------------------
 
 ```{r}
-tags$script(JS('useLoadingImage(5)'))
+tags$script(JS('useLoadingImage(14)'))
+tags$script(JS('initialNote()'))
 
 
 div(id = "note0", class = "initial_note",
-      HTML("<h3>Please wait. <br> <strong>Initial loading</strong> takes time. <br></h3>")
+      HTML("<h3>Please wait. <br> <strong>Initial loading</strong> takes about 15 seconds. <br></h3>")
 )
 
 
@@ -134,13 +155,17 @@ textInput("text", label="Streaming keyword:",
 )
 
 sliderInput("nsec", label = "Streaming data collection (sec):",
-            value = 5, min = 5, max = 180)
+            value = 10, min = 5, max = 180)
 
 radioButtons("retweets", label = "Include retweets:",
              choices = c("True", "False"),
              selected = "True", inline = TRUE) 
 
 HTML('<button id="update" type="button" class="btn btn-default action-button" onclick="useLoadingImage()">Stream</button>')
+
+div(id = "preload", class = "n_tweets",
+    h3("Loading sample data...")
+    )
 ```
 
 ##### Display Options:
@@ -152,13 +177,15 @@ div(
   ),
   div(
     id = "main_content0",
+    div(id = "display_inputs",
     textInput("remove", "Words to remove (separated by ';'):", 
                   placeholder = "blacklivesmatter; blm;"),
     sliderInput('n_min_wc', 'Word cloud minimum frequency:',
-                min = 1, value = 2, max = 10),
+                min = 2, value = 3, max = 10),
     sliderInput('max_size', 'Word cloud maximum word size:', 
                 value = 25, min = 10, max=50),
-    div(class = "n_tweets",
+    ),
+    div( id = "n_tweets", class = "n_tweets",
         renderUI({ h3(strong(nobs()), "tweets collected") })
         )
   )
@@ -178,6 +205,10 @@ tw <- reactive({
   # react to search button
   input$update
   print('streaming...')
+  
+  print(input$update)
+  # use preloaded data for the initial setup
+  if (input$update==0) return(rt)
   
   isolate({
     stream_tweets(

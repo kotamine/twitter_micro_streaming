@@ -5,8 +5,8 @@ account: kotamine
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 2469382
-bundleId: 3284618
+bundleId: 3287872
 url: https://kotamine.shinyapps.io/flexdashboard_example4/
-when: 1592431805.71711
+when: 1592493375.13546
 asMultiple: FALSE
 asStatic: FALSE
